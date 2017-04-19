@@ -14,7 +14,7 @@ function (angular, _, sdk, dateMath, kbn) {
   /** @ngInject */
   function KairosDBDatasource(instanceSettings, $q, backendSrv, templateSrv) {
     this.type = instanceSettings.type;
-    this.url = instanceSettings.url;
+    this.url = instanceSettings.url.replace(/\/+$/, "");
     this.name = instanceSettings.name;
     this.withCredentials = instanceSettings.withCredentials;
     this.supportMetrics = true;
@@ -31,7 +31,7 @@ function (angular, _, sdk, dateMath, kbn) {
       url: this.url + '/api/v1/health/check',
       method: 'GET'
     }).then(function(response) {
-      if (response.status === 204 || response.status === 200) {
+      if (response.status === 204) {
         return { status: "success", message: "Data source is working", title: "Success" };
       }
     });
@@ -66,26 +66,6 @@ function (angular, _, sdk, dateMath, kbn) {
 
     return this.performTimeSeriesQuery(queries, start, end)
       .then(handleKairosDBQueryResponseAlias, handleQueryError);
-  };
-
-  KairosDBDatasource.prototype.targetContainsTemplate = function(target) {
-    if (target.filters && target.filters.length > 0) {
-      for (var i = 0; i < target.filters.length; i++) {
-        if (this.templateSrv.variableExists(target.filters[i].filter)) {
-          return true;
-        }
-      }
-    }
-
-    if (target.tags && Object.keys(target.tags).length > 0) {
-      for (var tagKey in target.tags) {
-        if (this.templateSrv.variableExists(target.tags[tagKey])) {
-          return true;
-        }
-      }
-    }
-
-    return false;
   };
 
   KairosDBDatasource.prototype.performTimeSeriesQuery = function (queries, start, end) {
@@ -143,6 +123,7 @@ function (angular, _, sdk, dateMath, kbn) {
       method: 'POST',
       url: this.url + '/api/v1/datapoints/query/tags',
       withCredentials: this.withCredentials,
+      requestId: "metricKeyLookup",
       data: {
         metrics: [
           { name: metric }
@@ -196,6 +177,7 @@ function (angular, _, sdk, dateMath, kbn) {
       method: 'POST',
       withCredentials: this.withCredentials,
       url: this.url + '/api/v1/datapoints/query/tags',
+      requestId: "metricKeyValueLookup",
       data: {
         metrics: [metricsOptions],
         cache_time: 0,
@@ -216,6 +198,7 @@ function (angular, _, sdk, dateMath, kbn) {
       url: this.url + '/api/v1/datapoints/query/tags',
       method: 'POST',
       withCredentials: this.withCredentials,
+      requestId: "tagSuggestQuery",
       data: {
         metrics: [
           { name: metric }
@@ -374,7 +357,7 @@ function (angular, _, sdk, dateMath, kbn) {
           replacedValue = scopedVars[variableName].value;
         } else {
           var variable = templateSrv.variables.find(function(v) { return v.name === variableName; });
-          if (variable.current.value === "$__all") {
+          if (variable.current.value[0] === "$__all") {
             var filteredOptions = _.filter(variable.options, function(v) { return v.value !== "$__all"; });
             replacedValue = _.map(filteredOptions, function(opt) { return opt.value; });
           } else {
